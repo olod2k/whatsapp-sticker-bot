@@ -4,6 +4,7 @@ import makeWASocket, {
     fetchLatestBaileysVersion,
     useMultiFileAuthState,
 } from "baileys";
+import { rm } from "node:fs/promises";
 import pino from "pino";
 import qrcode from "qrcode-terminal";
 
@@ -39,8 +40,10 @@ async function start(): Promise<void> {
                 pairingRequested = true;
                 const code = await sock.requestPairingCode(config.pairingNumber);
                 console.log(
-                    `\nCódigo de pareamento: ${code}\n` +
-                        "WhatsApp → Aparelhos conectados → Conectar com número de telefone\n",
+                    `\nCódigo de pareamento: ${code.slice(0, 4)}-${code.slice(4)}\n` +
+                        "WhatsApp → Aparelhos conectados → Conectar um aparelho →\n" +
+                        "Conectar com número de telefone. Vale por ~2 minutos; se expirar,\n" +
+                        "um código novo é gerado sozinho.\n",
                 );
             } else if (!config.pairingNumber) {
                 console.log("\nEscaneie o QR code em WhatsApp → Aparelhos conectados:\n");
@@ -54,11 +57,17 @@ async function start(): Promise<void> {
 
         if (connection === "close") {
             const status = (lastDisconnect?.error as { output?: { statusCode?: number } } | undefined)?.output?.statusCode;
-            if (status === DisconnectReason.loggedOut) {
-                logger.error(
-                    `Sessão encerrada no celular. Apague a pasta "${config.authDir}" e rode de novo para parear.`,
+            // Pareamento não concluído (código expirou) ou aparelho desconectado
+            // no celular: a sessão salva não serve mais, então recomeça do zero.
+            if (status === DisconnectReason.loggedOut || !state.creds.registered) {
+                logger.warn(
+                    status === DisconnectReason.loggedOut && state.creds.registered
+                        ? "Sessão encerrada no celular. Gerando novo pareamento..."
+                        : "Pareamento não concluído a tempo. Gerando novo código...",
                 );
-                process.exit(1);
+                await rm(config.authDir, { recursive: true, force: true });
+                setTimeout(start, 2000);
+                return;
             }
             logger.warn(`Conexão caiu (código ${status}), reconectando...`);
             setTimeout(start, status === DisconnectReason.restartRequired ? 0 : 3000);
