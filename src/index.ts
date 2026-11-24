@@ -16,8 +16,9 @@ const logger = pino({
     level: process.env.LOG_LEVEL ?? "info",
     transport: { target: "pino-pretty", options: { translateTime: "SYS:HH:MM:ss", ignore: "pid,hostname" } },
 });
-// Baileys é muito verboso; só mostra avisos dele.
-const baileysLogger = logger.child({ module: "baileys" }, { level: process.env.BAILEYS_LOG ?? "warn" });
+// Baileys é muito verboso (ex.: avisos de sincronização de contatos que não
+// afetam o bot); só mostra erros dele.
+const baileysLogger = logger.child({ module: "baileys" }, { level: process.env.BAILEYS_LOG ?? "error" });
 
 async function start(): Promise<void> {
     const { state, saveCreds } = await useMultiFileAuthState(config.authDir);
@@ -28,6 +29,9 @@ async function start(): Promise<void> {
         logger: baileysLogger,
         browser: Browsers.ubuntu("Chrome"),
         markOnlineOnConnect: false,
+        // o bot não precisa do histórico de conversas: economiza CPU, RAM e dados
+        syncFullHistory: false,
+        shouldSyncHistoryMessage: () => false,
         ...(version ? { version } : {}),
     });
 
