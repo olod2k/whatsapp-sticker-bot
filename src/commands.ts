@@ -1,5 +1,6 @@
 import {
     downloadMediaMessage,
+    proto as WAProto,
     getContentType,
     normalizeMessageContent,
     type proto,
@@ -117,10 +118,24 @@ function menu(): string {
 export async function handleMessage(sock: WASocket, msg: WAMessage, logger: Logger): Promise<void> {
     const content = normalizeMessageContent(msg.message);
     const chat = msg.key.remoteJid;
-    if (!content || !chat || chat === "status@broadcast") return;
+    if (!chat || chat === "status@broadcast") return;
+
+    if (msg.messageStubType === WAProto.WebMessageInfo.StubType.CIPHERTEXT) {
+        logger.warn(
+            `Não consegui ler uma mensagem de ${msg.pushName || chat} (${msg.messageStubParameters?.[0] ?? "sem detalhes"}). ` +
+                "É normal logo após parear: o WhatsApp reenvia sozinho, ou peça para mandar de novo.",
+        );
+        return;
+    }
+    if (!content) return;
 
     const text = textOf(content);
+    logger.debug(
+        `msg de ${msg.pushName || "?"} em ${chat} fromMe=${!!msg.key.fromMe} ` +
+            `tipo=${getContentType(content)} texto=${JSON.stringify(text.slice(0, 40))}`,
+    );
     if (!text.startsWith(config.prefix)) return;
+    logger.info(`Comando recebido de ${msg.pushName || chat}: ${text.slice(0, 40)}`);
 
     const [rawCmd, ...rest] = text.slice(config.prefix.length).trim().split(/\s+/);
     const cmd = rawCmd?.toLowerCase() ?? "";

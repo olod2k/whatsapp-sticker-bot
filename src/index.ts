@@ -83,7 +83,10 @@ async function start(): Promise<void> {
             // "notify" = mensagem nova; "append" pega comandos que você mesmo
             // manda do celular quando o bot roda no seu número.
             const recent = Date.now() / 1000 - Number(msg.messageTimestamp ?? 0) < 60;
-            if (type !== "notify" && !(msg.key.fromMe && recent)) continue;
+            if (type !== "notify" && !(msg.key.fromMe && recent)) {
+                logger.debug(`ignorada (upsert=${type}, fromMe=${!!msg.key.fromMe}, recente=${recent})`);
+                continue;
+            }
             // não bloqueia a fila de eventos enquanto converte vídeo
             handleMessage(sock, msg, logger).catch((err) =>
                 logger.error({ err }, "erro ao processar mensagem"),
